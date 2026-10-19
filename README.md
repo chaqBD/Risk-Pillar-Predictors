@@ -2,7 +2,7 @@
 
 A web app for testing how well machine-learning models predict country risk-pillar scores.
 
-**Live app:** https://chaqbd.github.io/Risk-Pillar-Predictors/
+**Live app:** https://risk-pillar-predictors.netlify.app
 
 ## What it does
 
