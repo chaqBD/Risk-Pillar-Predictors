@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risk Pillar Predictors</title>
+<meta name="description" content="Upload country risk-pillar data, train 10 machine-learning models in your browser, and compare their accuracy.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232a78d6'/><path d='M7 22l6-6 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f4f4f2; --surface: #fcfcfb; --surface-2: #f0efec;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #77756f;
+  --border: #e2e1dc; --border-strong: #cfcdc6;
+  --accent: #2a78d6; --accent-ink: #1c5cab; --accent-soft: #e6f0fc;
+  --bar: #86b6ef; --bar-best: #1c5cab;
+  --s-actual: #2a78d6; --s-pred: #eb6834;
+  --good: #0f7a3d; --bad: #b3261e;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --surface-2: #232321;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #9a998f;
+    --border: #2e2d2a; --border-strong: #3d3c38;
+    --accent: #3987e5; --accent-ink: #86b6ef; --accent-soft: #17283d;
+    --bar: #256abf; --bar-best: #9ec5f4;
+    --s-actual: #3987e5; --s-pred: #d95926;
+    --good: #5cc98a; --bad: #f2867f;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #121211; --surface: #1a1a19; --surface-2: #232321;
+  --text: #f0efec; --text-2: #c3c2b7; --muted: #9a998f;
+  --border: #2e2d2a; --border-strong: #3d3c38;
+  --accent: #3987e5; --accent-ink: #86b6ef; --accent-soft: #17283d;
+  --bar: #256abf; --bar-best: #9ec5f4;
+  --s-actual: #3987e5; --s-pred: #d95926;
+  --good: #5cc98a; --bad: #f2867f;
+  --shadow: none;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+header { padding: 40px 0 24px; }
+header .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+h1 { font-size: 28px; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
+.lede { color: var(--text-2); margin: 8px 0 0; max-width: 680px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); font-size: 13px; color: var(--text-2); white-space: nowrap;
+}
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.pill.loading .dot { background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+.pill.ready .dot { background: var(--good); }
+.pill.error .dot { background: var(--bad); }
+@keyframes pulse { 50% { opacity: .3; } }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 24px; margin-bottom: 20px; box-shadow: var(--shadow);
+}
+.card.disabled { opacity: .5; pointer-events: none; }
+.card h2 { font-size: 18px; margin: 0 0 4px; display: flex; align-items: center; gap: 10px; }
+.step { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--accent-soft); color: var(--accent-ink); font-size: 13px; font-weight: 700; flex: none; }
+.hint { color: var(--text-2); margin: 0 0 16px; font-size: 14px; }
+
+/* Upload */
+.drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  border: 1.5px dashed var(--border-strong); border-radius: 12px; padding: 28px 16px; text-align: center;
+  cursor: pointer; transition: border-color .15s, background .15s;
+}
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop strong { font-size: 15px; }
+.drop span { color: var(--text-2); font-size: 13px; }
+.drop input { display: none; }
+details { margin-top: 12px; font-size: 13px; color: var(--text-2); }
+summary { cursor: pointer; color: var(--accent-ink); }
+details pre { background: var(--surface-2); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 12px; margin: 8px 0 0; color: var(--text); }
+.loaded { display: none; margin-top: 16px; padding: 12px 14px; border-radius: 10px; background: var(--surface-2); font-size: 14px; }
+.loaded.show { display: block; }
+.loaded b { font-variant-numeric: tabular-nums; }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 18px; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text-2); }
+select, .btn {
+  font: inherit; font-size: 14px; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 12px; min-height: 38px;
+}
+select { padding-right: 28px; max-width: 100%; }
+.btn { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
+.spacer { flex: 1; }
+
+/* Model tiles */
+.models { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.model {
+  position: relative; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  transition: border-color .15s, box-shadow .15s;
+}
+.model:hover { border-color: var(--border-strong); }
+.model.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.model > button {
+  all: unset; box-sizing: border-box; display: block; width: 100%; padding: 14px 14px 10px; cursor: pointer; border-radius: 12px;
+}
+.model > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.model .name { font-weight: 600; font-size: 14px; padding-right: 24px; }
+.model .desc { color: var(--text-2); font-size: 12.5px; margin-top: 2px; min-height: 2.6em; }
+.model .status { margin-top: 8px; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; }
+.model.done .status { color: var(--text); }
+.model .pick { display: flex; align-items: center; gap: 6px; padding: 8px 14px 12px; font-size: 12.5px; color: var(--text-2); border-top: 1px solid var(--border); cursor: pointer; }
+.model .pick input { accent-color: var(--accent); margin: 0; width: 15px; height: 15px; }
+.spin { width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: rot .7s linear infinite; flex: none; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+/* Detail */
+.detail { display: none; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px; }
+.detail.show { display: block; }
+.detail h3 { margin: 0; font-size: 17px; }
+.detail .sub { color: var(--text-2); font-size: 13px; margin: 2px 0 16px; }
+.tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.tile { background: var(--surface-2); border-radius: 10px; padding: 12px 14px; }
+.tile .k { font-size: 12px; font-weight: 600; color: var(--text-2); letter-spacing: .02em; }
+.tile .v { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; margin: 2px 0; letter-spacing: -0.01em; }
+.tile .d { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; }
+.tag.good { color: var(--good); } .tag.bad { color: var(--bad); }
+.chart-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin: 22px 0 8px; }
+.chart-head h4 { margin: 0; font-size: 14px; }
+.legend { display: flex; gap: 14px; font-size: 12.5px; color: var(--text-2); }
+.legend i { display: inline-block; width: 16px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.axis text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.grid line { stroke: var(--border); }
+
+/* Compare */
+.verdict { margin: 4px 0 18px; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft); font-size: 14px; }
+.panels { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.panel { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px 10px; }
+.panel h4 { margin: 0; font-size: 14px; }
+.panel .dir { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.row { display: grid; grid-template-columns: 118px 1fr 58px; align-items: center; gap: 8px; height: 26px; font-size: 12.5px; }
+.row .lbl { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .track { position: relative; height: 14px; }
+.row .bar { position: absolute; top: 0; height: 100%; background: var(--bar); border-radius: 0 4px 4px 0; min-width: 2px; }
+.row .bar.neg { border-radius: 4px 0 0 4px; }
+.row.best .bar { background: var(--bar-best); }
+.row.best .lbl { color: var(--text); font-weight: 600; }
+.row .zero { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--border-strong); }
+.row .val { text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+.row .val small { display: block; font-size: 10px; color: var(--accent-ink); font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: .04em; }
+.row:hover .track { background: var(--surface-2); border-radius: 4px; }
+.table-wrap { overflow-x: auto; margin-top: 20px; border: 1px solid var(--border); border-radius: 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-size: 12px; color: var(--text-2); font-weight: 600; background: var(--surface-2); }
+tbody tr:last-child td { border-bottom: 0; }
+td.best { font-weight: 700; color: var(--accent-ink); }
+.compare-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
+.empty { color: var(--muted); font-size: 14px; }
+
+.notice { display: none; margin-bottom: 20px; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--bad); color: var(--bad); background: var(--surface); font-size: 14px; }
+.notice.show { display: block; }
+.tip {
+  position: fixed; pointer-events: none; z-index: 10; background: var(--text); color: var(--surface);
+  padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45; opacity: 0; transition: opacity .1s;
+  font-variant-numeric: tabular-nums; max-width: 260px;
+}
+.tip.show { opacity: 1; }
+.tip .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+footer { color: var(--muted); font-size: 12.5px; padding: 8px 0 40px; }
+
+@media (max-width: 860px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  header { padding-top: 24px; } h1 { font-size: 23px; }
+  .card { padding: 18px 16px; }
+  .panels { grid-template-columns: 1fr; }
+  .models { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .model > button { padding: 12px 12px 8px; }
+  .model .pick { padding: 8px 12px 10px; }
+  .row { grid-template-columns: 96px 1fr 52px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="top">
+      <h1>Risk Pillar Predictors</h1>
+      <span class="pill loading" id="engine"><span class="dot"></span><span id="engine-text">Starting engine…</span></span>
+    </div>
+    <p class="lede">Upload monthly risk-pillar scores by country, train up to 10 machine-learning models, and see how accurately each one predicts the most recent months. Everything runs in your browser, so your data never leaves your computer.</p>
+  </header>
+
+  <div class="notice" id="notice" role="alert"></div>
+
+  <section class="card" id="card-upload">
+    <h2><span class="step">1</span>Upload risk pillar data</h2>
+    <p class="hint">A CSV with one row per country per month.</p>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept=".csv,text/csv">
+      <strong>Click to choose a CSV file</strong>
+      <span>or drag and drop it here</span>
+    </label>
+    <details>
+      <summary>What format does the file need?</summary>
+      <p>Columns: <b>Country</b>, <b>Period</b> (e.g. 2025-01), then one numeric column per risk pillar. Each country needs at least 13 months of history before the test period.</p>
+      <pre>Country,Period,InflationRisk,FXExternalRisk,DebtFiscalRisk,...
+Algeria,2015-01,5.09,0.87,7.95,...
+Algeria,2015-02,5.22,1.66,8.91,...</pre>
+    </details>
+    <div class="loaded" id="loaded"></div>
+  </section>
+
+  <section class="card disabled" id="card-models">
+    <h2><span class="step">2</span>Run models</h2>
+    <p class="hint">Click a model to train it and see how it performed. Models learn from all months before the test period and are scored on the test period.</p>
+    <div class="controls">
+      <label class="field">Risk pillar <select id="pillar"></select></label>
+      <label class="field">Test period
+        <select id="test">
+          <option value="6">Last 6 months</option>
+          <option value="12" selected>Last 12 months</option>
+          <option value="24">Last 24 months</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <button class="btn" id="run-all">Run all 10 models</button>
+    </div>
+    <div class="models" id="models"></div>
+
+    <div class="detail" id="detail" aria-live="polite">
+      <h3 id="d-name"></h3>
+      <p class="sub" id="d-sub"></p>
+      <div class="tiles" id="d-tiles"></div>
+      <div class="chart-head">
+        <h4 id="d-chart-title">Actual vs predicted</h4>
+        <div class="legend">
+          <span><i style="border-color:var(--s-actual)"></i>Actual</span>
+          <span><i style="border-color:var(--s-pred);border-top-style:dashed"></i>Predicted</span>
+        </div>
+        <label class="field">Country <select id="d-country"></select></label>
+      </div>
+      <div class="chart" id="d-chart"></div>
+    </div>
+  </section>
+
+  <section class="card disabled" id="card-compare">
+    <h2><span class="step">3</span>Compare models</h2>
+    <p class="hint">Tick <b>Compare</b> on the models you want, then compare them side by side. Models you haven't run yet are trained first.</p>
+    <div class="compare-actions">
+      <button class="btn primary" id="compare">Compare selected models</button>
+      <button class="btn" id="select-all">Select all</button>
+      <button class="btn" id="select-none">Clear selection</button>
+      <span class="spacer"></span>
+      <button class="btn" id="download" hidden>Download CSV</button>
+    </div>
+    <div id="compare-out"><p class="empty">No comparison yet.</p></div>
+  </section>
+
+  <footer>Models: scikit-learn, running in the browser via Pyodide. Features per country: values 1, 2, 3, 6 and 12 months back, 3/6/12-month averages, 6-month volatility and calendar month.</footer>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const MODELS = [
+  { key: "linear", name: "Linear Regression", desc: "Straight-line fit on all features." },
+  { key: "ridge",  name: "Ridge",             desc: "Linear, with a penalty that keeps weights small." },
+  { key: "lasso",  name: "Lasso",             desc: "Linear, and drops unhelpful features." },
+  { key: "enet",   name: "Elastic Net",       desc: "A blend of Ridge and Lasso." },
+  { key: "huber",  name: "Huber",             desc: "Linear, robust to outliers." },
+  { key: "knn",    name: "K-Nearest Neighbours", desc: "Averages the 10 most similar past cases." },
+  { key: "tree",   name: "Decision Tree",     desc: "One tree of if/then splits." },
+  { key: "rf",     name: "Random Forest",     desc: "Average of 100 decision trees." },
+  { key: "et",     name: "Extra Trees",       desc: "100 extra-randomised trees." },
+  { key: "gbr",    name: "Gradient Boosting", desc: "Trees built to fix each other's errors." },
+];
+const METRICS = [
+  { key: "MAE",   label: "MAE",   lower: true,  desc: "Average size of the error, in pillar units." },
+  { key: "RMSE",  label: "RMSE",  lower: true,  desc: "Like MAE, but big misses count more." },
+  { key: "R2",    label: "R²",    lower: false, desc: "Share of variation explained. 1 is perfect." },
+  { key: "sMAPE", label: "sMAPE", lower: true,  desc: "Average percentage error (safe with zeros)." },
+  { key: "MASE",  label: "MASE",  lower: true,  desc: "Error vs. “same as last month”. Below 1 beats it." },
+];
+const NAME = Object.fromEntries(MODELS.map(m => [m.key, m.name]));
+const $ = (id) => document.getElementById(id);
+
+// ---------- worker bridge ----------
+const worker = new Worker("worker.js");
+let nextId = 0; const pending = new Map();
+worker.onmessage = ({ data }) => {
+  if (data.type === "status") return setEngine("loading", data.text);
+  if (data.type === "ready") return setEngine("ready", "Engine ready");
+  if (data.type === "fatal") { setEngine("error", "Engine failed"); return showError("Couldn't start the Python engine: " + data.text + ". Check your internet connection and reload."); }
+  const p = pending.get(data.id); pending.delete(data.id);
+  data.ok ? p.resolve(data.result) : p.reject(new Error(data.error));
+};
+const call = (fn, ...args) => new Promise((resolve, reject) => {
+  const id = nextId++; pending.set(id, { resolve, reject }); worker.postMessage({ id, fn, args });
+});
+function setEngine(state, text) { $("engine").className = "pill " + state; $("engine-text").textContent = text; }
+function showError(msg) { const n = $("notice"); n.textContent = msg; n.classList.add("show"); }
+function clearError() { $("notice").classList.remove("show"); }
+
+// ---------- state ----------
+let dataInfo = null;
+const results = {};                    // "pillar|test|model" -> result
+const running = new Set();             // model keys currently training (for current settings)
+const selected = new Set();
+let activeKey = null, lastCompare = null;
+const ctx = () => `${$("pillar").value}|${$("test").value}`;
+const resFor = (key) => results[`${ctx()}|${key}`];
+
+// ---------- formatting ----------
+function fmt(v, key) {
+  if (v === null || v === undefined || !isFinite(v)) return "–";
+  if (key === "sMAPE") return v.toFixed(1) + "%";
+  const a = Math.abs(v);
+  return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(2) : v.toFixed(3);
+}
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---------- upload ----------
+const drop = $("drop");
+$("file").addEventListener("change", (e) => e.target.files[0] && loadFile(e.target.files[0]));
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => e.dataTransfer.files[0] && loadFile(e.dataTransfer.files[0]));
+
+async function loadFile(file) {
+  clearError();
+  const box = $("loaded");
+  box.classList.add("show");
+  box.innerHTML = `<span class="tag"><span class="spin"></span> Reading ${esc(file.name)}…</span>`;
+  try {
+    const info = await call("load_csv", await file.text());
+    dataInfo = info;
+    Object.keys(results).forEach(k => delete results[k]);
+    activeKey = null; lastCompare = null;
+    box.innerHTML = `<b>${esc(file.name)}</b> loaded: <b>${info.rows.toLocaleString()}</b> rows · <b>${info.countries}</b> countries · <b>${info.start}</b> to <b>${info.end}</b> · <b>${info.pillars.length}</b> risk pillars`
+      + (info.droppedRows ? ` · <span class="tag bad">${info.droppedRows} rows skipped (unreadable date)</span>` : "");
+    $("pillar").innerHTML = info.pillars.map(p => `<option>${esc(p)}</option>`).join("");
+    $("d-country").innerHTML = `<option value="">All countries (average)</option>` + info.countryList.map(c => `<option>${esc(c)}</option>`).join("");
+    $("card-models").classList.remove("disabled");
+    $("card-compare").classList.remove("disabled");
+    renderAll();
+  } catch (err) {
+    box.classList.remove("show");
+    showError("Couldn't read that file: " + err.message);
+  }
+}
+
+// ---------- model tiles ----------
+function renderTiles() {
+  $("models").innerHTML = MODELS.map(m => {
+    const r = resFor(m.key), busy = running.has(`${ctx()}|${m.key}`);
+    const status = busy ? `<span class="spin"></span> Training…`
+      : r ? `MAE ${fmt(r.metrics.MAE)} · MASE ${fmt(r.metrics.MASE)}` : "Not run yet";
+    return `<div class="model ${r ? "done" : ""} ${activeKey === m.key ? "active" : ""}">
+      <button data-run="${m.key}" aria-pressed="${activeKey === m.key}">
+        <div class="name">${m.name}</div><div class="desc">${m.desc}</div>
+        <div class="status">${status}</div>
+      </button>
+      <label class="pick"><input type="checkbox" data-pick="${m.key}" ${selected.has(m.key) ? "checked" : ""}> Compare</label>
+    </div>`;
+  }).join("");
+  $("compare").textContent = `Compare selected models (${selected.size})`;
+  $("compare").disabled = selected.size < 1;
+}
+$("models").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-run]"); if (b) openModel(b.dataset.run);
+});
+$("models").addEventListener("change", (e) => {
+  const k = e.target.dataset.pick; if (!k) return;
+  e.target.checked ? selected.add(k) : selected.delete(k); renderTiles();
+});
+
+async function runModel(key) {
+  const id = `${ctx()}|${key}`;
+  if (results[id]) return results[id];
+  const [pillar, test] = ctx().split("|");
+  running.add(id); renderTiles();
+  try {
+    const r = await call("run_model", key, pillar, Number(test));
+    results[id] = r; selected.add(key);
+    return r;
+  } finally { running.delete(id); renderTiles(); }
+}
+
+async function openModel(key) {
+  clearError(); activeKey = key; renderTiles();
+  try { await runModel(key); if (activeKey === key) renderDetail(); }
+  catch (err) { showError(`${NAME[key]} failed: ${err.message}`); }
+}
+
+$("run-all").addEventListener("click", async () => {
+  clearError(); $("run-all").disabled = true;
+  try { for (const m of MODELS) { await runModel(m.key); if (!activeKey) { activeKey = m.key; renderTiles(); renderDetail(); } } }
+  catch (err) { showError(err.message); }
+  finally { $("run-all").disabled = false; }
+});
+
+function renderAll() { renderTiles(); renderDetail(); renderCompare(); }
+$("pillar").addEventListener("change", () => { lastCompare = null; renderAll(); });
+$("test").addEventListener("change", () => { lastCompare = null; renderAll(); });
+
+// ---------- detail ----------
+function renderDetail() {
+  const r = activeKey && resFor(activeKey);
+  $("detail").classList.toggle("show", !!r);
+  if (!r) return;
+  $("d-name").textContent = NAME[activeKey];
+  $("d-sub").textContent = `${r.pillar} · tested on ${r.testStart} to ${r.testEnd} (${r.testRows.toLocaleString()} country-months) · trained on ${r.trainRows.toLocaleString()} · ${r.seconds.toFixed(1)}s`;
+  $("d-tiles").innerHTML = METRICS.map(m => {
+    const v = r.metrics[m.key];
+    let extra = "";
+    if (m.key === "MASE" && v !== null) extra = v < 1 ? `<span class="tag good">✓ Beats naive</span>` : `<span class="tag bad">✗ Worse than naive</span>`;
+    return `<div class="tile"><div class="k">${m.label}</div><div class="v">${fmt(v, m.key)}</div>${extra ? `<div>${extra}</div>` : ""}<div class="d">${m.desc} ${m.lower ? "Lower is better." : "Higher is better."}</div></div>`;
+  }).join("");
+  drawDetailChart();
+}
+$("d-country").addEventListener("change", drawDetailChart);
+
+function drawDetailChart() {
+  const r = activeKey && resFor(activeKey); if (!r) return;
+  const c = $("d-country").value;
+  const s = c ? r.byCountry[c] : r.series;
+  $("d-chart-title").textContent = `Actual vs predicted ${r.pillar}, ${c || "all-country average"}`;
+  if (!s) { $("d-chart").innerHTML = `<p class="empty">No test-period data for ${esc(c)}.</p>`; return; }
+  lineChart($("d-chart"), s.periods, [
+    { name: "Actual", values: s.actual, color: "var(--s-actual)" },
+    { name: "Predicted", values: s.pred, color: "var(--s-pred)", dash: "5 4" },
+  ]);
+}
+
+// ---------- line chart (SVG, crosshair tooltip) ----------
+function niceTicks(lo, hi, n = 4) {
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const step0 = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(f => f * mag).find(s => s >= step0);
+  const ticks = []; for (let v = Math.floor(lo / step) * step; v <= hi + step * 1e-9; v += step) ticks.push(+v.toFixed(10));
+  if (ticks[ticks.length - 1] < hi) ticks.push(ticks[ticks.length - 1] + step);
+  return ticks;
+}
+function lineChart(el, periods, series) {
+  const W = Math.max(300, el.clientWidth), H = 260, m = { t: 12, r: 16, b: 28, l: 44 };
+  const all = series.flatMap(s => s.values);
+  const ticks = niceTicks(Math.min(0, ...all), Math.max(...all));
+  const y0 = ticks[0], y1 = ticks[ticks.length - 1];
+  const x = (i) => m.l + (periods.length < 2 ? 0 : i * (W - m.l - m.r) / (periods.length - 1));
+  const y = (v) => m.t + (H - m.t - m.b) * (1 - (v - y0) / (y1 - y0));
+  const every = Math.ceil(periods.length / Math.max(2, Math.floor((W - m.l) / 70)));
+  let svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Line chart of actual and predicted values">`;
+  svg += `<g class="grid">${ticks.map(t => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}"/>`).join("")}</g>`;
+  svg += `<g class="axis">${ticks.map(t => `<text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end">${fmt(t).replace(/\.?0+$/, "")}</text>`).join("")}`;
+  svg += periods.map((p, i) => i % every ? "" : `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${p}</text>`).join("") + `</g>`;
+  for (const s of series) {
+    svg += `<path d="${s.values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("")}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${s.dash ? `stroke-dasharray="${s.dash}"` : ""}/>`;
+  }
+  svg += `<line id="xh" y1="${m.t}" y2="${H - m.b}" stroke="var(--border-strong)" visibility="hidden"/>`;
+  svg += series.map((s, k) => `<circle class="hd" data-k="${k}" r="4.5" fill="${s.color}" stroke="var(--surface)" stroke-width="2" visibility="hidden"/>`).join("");
+  svg += `<rect x="${m.l}" y="0" width="${W - m.l - m.r}" height="${H}" fill="transparent" id="hit"/></svg>`;
+  el.innerHTML = svg;
+  const root = el.querySelector("svg"), xh = root.querySelector("#xh"), dots = root.querySelectorAll(".hd");
+  const move = (ev) => {
+    const pt = root.getBoundingClientRect(), sx = (ev.clientX - pt.left) * W / pt.width;
+    const i = Math.max(0, Math.min(periods.length - 1, Math.round((sx - m.l) / ((W - m.l - m.r) / Math.max(1, periods.length - 1)))));
+    xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i)); xh.setAttribute("visibility", "visible");
+    dots.forEach((d, k) => { d.setAttribute("cx", x(i)); d.setAttribute("cy", y(series[k].values[i])); d.setAttribute("visibility", "visible"); });
+    showTip(ev, `<b>${periods[i]}</b><br>` + series.map(s => `<span class="sw" style="background:${s.color}"></span>${s.name}: ${fmt(s.values[i])}`).join("<br>")
+      + `<br><span style="opacity:.75">Error: ${fmt(series[1].values[i] - series[0].values[i])}</span>`);
+  };
+  const leave = () => { xh.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); hideTip(); };
+  const hit = root.querySelector("#hit");
+  hit.addEventListener("pointermove", move); hit.addEventListener("pointerleave", leave);
+}
+let resizeT; window.addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(drawDetailChart, 150); });
+
+// ---------- tooltip ----------
+const tip = $("tip");
+function showTip(ev, html) {
+  tip.innerHTML = html; tip.classList.add("show");
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let left = ev.clientX + 14, top = ev.clientY - h - 10;
+  if (left + w > innerWidth - 8) left = ev.clientX - w - 14;
+  if (top < 8) top = ev.clientY + 16;
+  tip.style.left = left + "px"; tip.style.top = top + "px";
+}
+function hideTip() { tip.classList.remove("show"); }
+
+// ---------- compare ----------
+$("select-all").addEventListener("click", () => { MODELS.forEach(m => selected.add(m.key)); renderTiles(); });
+$("select-none").addEventListener("click", () => { selected.clear(); renderTiles(); });
+$("compare").addEventListener("click", async () => {
+  clearError();
+  const keys = MODELS.map(m => m.key).filter(k => selected.has(k));
+  const btn = $("compare"); btn.disabled = true;
+  try {
+    for (let i = 0; i < keys.length; i++) {
+      if (!resFor(keys[i])) {
+        $("compare-out").innerHTML = `<p class="empty"><span class="tag"><span class="spin"></span> Training ${NAME[keys[i]]} (${i + 1} of ${keys.length})…</span></p>`;
+        await runModel(keys[i]);
+      }
+    }
+    lastCompare = { ctx: ctx(), keys };
+    renderCompare();
+    $("card-compare").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) { showError(err.message); renderCompare(); }
+  finally { renderTiles(); }
+});
+
+function compareRows() {
+  return lastCompare.keys.map(k => ({ key: k, name: NAME[k], r: resFor(k) }))
+    .filter(x => x.r).sort((a, b) => a.r.metrics.MAE - b.r.metrics.MAE);
+}
+function bestKey(rows, m) {
+  const vals = rows.filter(x => x.r.metrics[m.key] !== null);
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => (m.lower ? b.r.metrics[m.key] < a.r.metrics[m.key] : b.r.metrics[m.key] > a.r.metrics[m.key]) ? b : a).key;
+}
+
+function renderCompare() {
+  const out = $("compare-out");
+  $("download").hidden = true;
+  if (!lastCompare || lastCompare.ctx !== ctx()) { out.innerHTML = `<p class="empty">No comparison yet for this pillar and test period.</p>`; return; }
+  const rows = compareRows();
+  if (!rows.length) { out.innerHTML = `<p class="empty">No results to compare.</p>`; return; }
+  const best = Object.fromEntries(METRICS.map(m => [m.key, bestKey(rows, m)]));
+  const wins = {}; Object.values(best).forEach(k => k && (wins[k] = (wins[k] || 0) + 1));
+  const top = Object.entries(wins).sort((a, b) => b[1] - a[1]);
+  const [pillar] = ctx().split("|"), r0 = rows[0].r;
+  let verdict = rows.length === 1
+    ? `Only <b>${rows[0].name}</b> selected. Select more models to compare them.`
+    : `<b>${NAME[top[0][0]]}</b> is best on ${top[0][1]} of 5 metrics` + (top.length > 1 ? `; ${top.slice(1).map(([k, n]) => `${NAME[k]} on ${n}`).join(", ")}.` : ".")
+      + ` Lowest error (MAE): <b>${rows[0].name}</b>, ${fmt(r0.metrics.MAE)}.`;
+  verdict += ` <span style="color:var(--text-2)">${esc(pillar)}, tested on ${r0.testStart} to ${r0.testEnd}.</span>`;
+
+  let html = `<div class="verdict">${verdict}</div><div class="panels">`;
+  for (const m of METRICS) {
+    const vals = rows.map(x => x.r.metrics[m.key]).filter(v => v !== null && isFinite(v));
+    const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals), span = hi - lo || 1;
+    const zeroPct = (-lo / span) * 100;
+    html += `<div class="panel"><h4>${m.label}</h4><div class="dir">${m.lower ? "Lower is better" : "Higher is better"} · ${m.desc}</div>`;
+    for (const x of rows) {
+      const v = x.r.metrics[m.key], ok = v !== null && isFinite(v);
+      const left = ok ? ((Math.min(v, 0) - lo) / span) * 100 : 0, width = ok ? (Math.abs(v) / span) * 100 : 0;
+      const isBest = best[m.key] === x.key;
+      html += `<div class="row ${isBest ? "best" : ""}" data-tip="${x.key}" data-m="${m.key}">
+        <span class="lbl" title="${x.name}">${x.name}</span>
+        <span class="track">${lo < 0 ? `<span class="zero" style="left:${zeroPct}%"></span>` : ""}<span class="bar ${v < 0 ? "neg" : ""}" style="left:${left}%;width:${width}%"></span></span>
+        <span class="val">${isBest ? "<small>Best</small>" : ""}${fmt(v, m.key)}</span></div>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div><div class="table-wrap"><table><thead><tr><th>Model</th>${METRICS.map(m => `<th>${m.label} ${m.lower ? "↓" : "↑"}</th>`).join("")}<th>Train time</th></tr></thead><tbody>`;
+  html += rows.map(x => `<tr><td>${x.name}</td>${METRICS.map(m => `<td class="${best[m.key] === x.key ? "best" : ""}">${fmt(x.r.metrics[m.key], m.key)}</td>`).join("")}<td>${x.r.seconds.toFixed(1)}s</td></tr>`).join("");
+  html += `</tbody></table></div><p class="hint" style="margin:10px 0 0">Bold = best for that metric. Naive “same as last month” MAE for reference: ${fmt(r0.naiveMAE)}.</p>`;
+  out.innerHTML = html;
+  $("download").hidden = false;
+}
+
+$("compare-out").addEventListener("pointermove", (ev) => {
+  const row = ev.target.closest(".row"); if (!row) return hideTip();
+  const r = resFor(row.dataset.tip), m = METRICS.find(q => q.key === row.dataset.m);
+  const rows = compareRows(), sorted = rows.map(x => x.r.metrics[m.key]).filter(v => v !== null).sort((a, b) => m.lower ? a - b : b - a);
+  const rank = sorted.indexOf(r.metrics[m.key]) + 1;
+  showTip(ev, `<b>${NAME[row.dataset.tip]}</b><br>${m.label}: ${fmt(r.metrics[m.key], m.key)}<br><span style="opacity:.75">Rank ${rank} of ${rows.length}</span>`);
+});
+$("compare-out").addEventListener("pointerleave", hideTip);
+
+$("download").addEventListener("click", () => {
+  const [pillar, test] = ctx().split("|");
+  const lines = [["Model", "Pillar", "TestStart", "TestEnd", ...METRICS.map(m => m.key), "TrainSeconds"].join(",")];
+  for (const x of compareRows()) lines.push([`"${x.name}"`, `"${pillar}"`, x.r.testStart, x.r.testEnd, ...METRICS.map(m => x.r.metrics[m.key] ?? ""), x.r.seconds.toFixed(2)].join(","));
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/csv" }));
+  a.download = `model_comparison_${pillar}_last${test}m.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+
+renderTiles();
+</script>
+</body>
+</html>
